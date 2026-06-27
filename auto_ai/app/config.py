@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     
     # Path configuration
     BASE_DIR: Path = Path(__file__).resolve().parent.parent
-    WORKSPACE_DIR: Path = Path("/home/tarak/Documents/googlexkaggle_capston_project")
+    WORKSPACE_DIR: Path = Path(os.getenv("WORKSPACE_DIR", str(BASE_DIR.parent)))
     DATA_DIR: Path = WORKSPACE_DIR / "auto_ai" / "data"
     DB_PATH: Path = DATA_DIR / "modelsmith.db"
     
