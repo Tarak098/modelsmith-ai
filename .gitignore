@@ -1,0 +1,26 @@
+# Python virtual environment
+venv/
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local database and run directories
+auto_ai/data/modelsmith.db
+auto_ai/data/runs/*
+auto_ai/data/uploads/*
+!auto_ai/data/.gitkeep
+
+# System & IDE files
+.DS_Store
+.vscode/
+.idea/
+
+# Environment configurations containing credentials
+.env
+.env.local
+.env.*.local
