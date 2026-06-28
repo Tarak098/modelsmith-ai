@@ -100,3 +100,19 @@ def get_project_report(project_id: str):
         raise HTTPException(status_code=404, detail="Report not generated yet or project failed.")
         
     return FileResponse(report_path)
+
+@router.get("/{project_id}/model/download")
+def download_project_model(project_id: str):
+    """Download the trained best_model.joblib file."""
+    run_dir = StorageManager.get_run_dir(project_id)
+    model_path = run_dir / "models" / "best_model.joblib"
+    
+    if not model_path.exists():
+        raise HTTPException(status_code=404, detail="Model file not found or not generated yet.")
+        
+    return FileResponse(
+        path=model_path,
+        filename="best_model.joblib",
+        media_type="application/octet-stream"
+    )
+

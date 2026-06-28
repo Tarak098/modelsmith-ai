@@ -189,7 +189,8 @@ async function loadHistoryList() {
             const dateStr = new Date(p.created_at).toLocaleString();
             const isFinished = p.status === 'completed';
             const actionBtn = isFinished 
-                ? `<button class="btn" style="padding:6px 12px; font-size:0.75rem; background:var(--success-color); box-shadow:none;" onclick="viewReport('${p.id}')">Read Report</button>` 
+                ? `<button class="btn" style="padding:6px 12px; font-size:0.75rem; background:var(--success-color); box-shadow:none;" onclick="viewReport('${p.id}')">Read Report</button>
+                   <a class="btn btn-secondary" style="padding:6px 12px; font-size:0.75rem; display:inline-flex; align-items:center; text-decoration:none;" href="/api/projects/${p.id}/model/download" download>Model 📥</a>` 
                 : `<button class="btn btn-secondary" style="padding:6px 12px; font-size:0.75rem" onclick="viewExistingWorkflow('${p.id}')">Telemetry</button>`;
             
             const row = document.createElement('tr');
@@ -400,6 +401,10 @@ async function pollWorkflowTelemetry(projectId) {
                 const actionCard = document.getElementById('view-report-action-card');
                 actionCard.style.display = 'block';
                 document.getElementById('btn-view-finished-report').onclick = () => viewReport(projectId);
+                const downloadBtn = document.getElementById('btn-download-built-model');
+                if (downloadBtn) {
+                    downloadBtn.href = `/api/projects/${projectId}/model/download`;
+                }
             } else {
                 alert("Agents reported failure: " + project.error_message);
             }

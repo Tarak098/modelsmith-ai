@@ -12,6 +12,7 @@ ModelSmith AI is an autonomous, multi-agent AI research platform designed to aut
 - **Real-Time Telemetry Dashboard**: A stunning, modern dashboard showing agent logs, model leaderboards, and evaluation plots in real time.
 - **Long-Term Memory Integration**: Uses database memory stores to retrieve contexts from previous experiments, improving iteration speed and pipeline relevance.
 - **Automatic Research Reports**: Generates professional HTML & Markdown summaries including canditate leaderboards, diagnostic assessments, and explainability findings.
+- **Model Export & Download**: Directly download the final trained `.joblib` model binary from the real-time telemetry panel or the project history table.
 
 ---
 
@@ -71,6 +72,13 @@ Inspect data attributes and candidate models using generated interactive charts.
 Connect the platform to Gemini models by inputting Developer API keys and selecting default LLMs.
 
 ![Settings Panel](images/settings_page.png)
+
+### Model Exporting
+After training completes, download the final serialized ML model file directly from the dashboard:
+
+| Telemetry Completion Card | Project History Download |
+|---|---|
+| ![Telemetry Completed](images/telemetry_completed_card.png) | ![History Download](images/project_history.png) |
 
 ---
 

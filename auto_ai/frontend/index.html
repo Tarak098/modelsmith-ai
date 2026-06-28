@@ -211,7 +211,10 @@
                 
                 <div id="view-report-action-card" class="glass-card" style="display: none; margin-top: 24px; text-align: center;">
                     <p style="color: var(--success-color); font-weight: bold; margin-bottom: 12px;">Research Complete! Professional report has been successfully generated.</p>
-                    <button class="btn" id="btn-view-finished-report">View & Export Research Report</button>
+                    <div style="display: flex; gap: 16px; justify-content: center; align-items: center; flex-wrap: wrap;">
+                        <button class="btn" id="btn-view-finished-report">View & Export Research Report</button>
+                        <a class="btn btn-secondary" id="btn-download-built-model" href="#" download>Download Trained Model (.joblib)</a>
+                    </div>
                 </div>
             </div>
             
