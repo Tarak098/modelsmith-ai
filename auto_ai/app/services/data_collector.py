@@ -69,124 +69,293 @@ class DataCollectorAgent:
             raise AgentException(self.agent_name, error_msg)
 
     def _generate_synthetic_data(self, project_id: str, name: str, category: str, desc: str) -> pd.DataFrame:
-        """Create realistic domain-specific tabular datasets."""
-        # Seeding based on project_id characters ensures each run has dynamic results,
-        # but is deterministic/repeatable if re-run with the same ID.
+        """Create realistic domain-specific tabular datasets dynamically using a schema."""
+        # Seeding based on project_id characters ensures each run is unique but repeatable if needed.
         seed_val = sum(ord(c) for c in project_id)
         np.random.seed(seed_val % 10000)
         n_samples = 500
+
+        # Retrieve/build the schema based on description or category
+        schema = self._get_dataset_schema(category, name, desc)
         
-        # 1. Diabetes Prediction
-        if "diabet" in name or "diabet" in desc:
-            data = {
-                "Pregnancies": np.random.randint(0, 15, size=n_samples),
-                "Glucose": np.random.randint(70, 200, size=n_samples),
-                "BloodPressure": np.random.randint(60, 110, size=n_samples),
-                "SkinThickness": np.random.randint(10, 50, size=n_samples),
-                "Insulin": np.random.randint(15, 300, size=n_samples),
-                "BMI": np.round(np.random.uniform(18.0, 45.0, size=n_samples), 1),
-                "DiabetesPedigree": np.round(np.random.uniform(0.1, 2.0, size=n_samples), 3),
-                "Age": np.random.randint(21, 80, size=n_samples),
+        # Build the dataset using the schema
+        return self._generate_data_from_schema(schema, n_samples)
+
+    def _get_dataset_schema(self, category: str, name: str, desc: str) -> Dict[str, Any]:
+        """Gets the dataset schema via LLM or rule-based fallback."""
+        prompt = f"""
+        Design a realistic synthetic dataset schema for the following machine learning prompt:
+        Prompt: "{desc}"
+        Project Name: "{name}"
+        Category: {category}
+
+        Generate a JSON object containing:
+        1. "target_column": Name of the target variable (no spaces, e.g. "HeartDisease", "CarPrice").
+        2. "target_type": "binary" (classification) or "continuous" (regression) or "multiclass".
+        3. "features": A list of 5-7 feature columns, each containing:
+           - "name": Name of the feature (no spaces, e.g. "Age", "Income").
+           - "type": "numeric" or "categorical".
+           - "min_val": (only if numeric) Minimum value.
+           - "max_val": (only if numeric) Maximum value.
+           - "categories": (only if categorical) List of string categories.
+           - "correlation_weight": A float between -1.0 and 1.0 indicating how it correlates to target.
+        """
+        try:
+            from auto_ai.app.infra.llm import llm_client
+            # Request LLM JSON
+            schema = llm_client.generate_json(prompt, system_instruction="You are a data science architect. Respond only with raw JSON.")
+            if schema and "target_column" in schema and "features" in schema:
+                return schema
+        except Exception as e:
+            from auto_ai.app.utils.logging import logger
+            logger.warning(f"Failed to get dynamic schema from LLM: {e}. Falling back to Rule-Based Heuristic schemas.")
+
+        # Fallback to Rule-Based Heuristics
+        return self._get_fallback_dataset_schema(category, name, desc)
+
+    def _get_fallback_dataset_schema(self, category: str, name: str, desc: str) -> Dict[str, Any]:
+        """Heuristic rule-based database of domain schemas."""
+        text = f"{name} {desc}".lower()
+        
+        # 1. Diabetes
+        if "diabet" in text:
+            return {
+                "target_column": "Outcome",
+                "target_type": "binary",
+                "features": [
+                    {"name": "Pregnancies", "type": "numeric", "min_val": 0, "max_val": 15, "correlation_weight": 0.2},
+                    {"name": "Glucose", "type": "numeric", "min_val": 70, "max_val": 200, "correlation_weight": 0.8},
+                    {"name": "BloodPressure", "type": "numeric", "min_val": 60, "max_val": 110, "correlation_weight": 0.1},
+                    {"name": "BMI", "type": "numeric", "min_val": 18.0, "max_val": 45.0, "correlation_weight": 0.5},
+                    {"name": "DiabetesPedigree", "type": "numeric", "min_val": 0.1, "max_val": 2.0, "correlation_weight": 0.3},
+                    {"name": "Age", "type": "numeric", "min_val": 21, "max_val": 80, "correlation_weight": 0.4}
+                ]
             }
-            # Inject some missing values (NaN) to test validation & cleaning
-            for col in ["BloodPressure", "Insulin", "SkinThickness"]:
-                mask = np.random.choice([True, False], size=n_samples, p=[0.05, 0.95])
-                data[col] = np.where(mask, np.nan, data[col])
+            
+        # 2. House Prices
+        if any(k in text for k in ["house", "home", "rent", "estate", "apartment"]):
+            return {
+                "target_column": "Price",
+                "target_type": "continuous",
+                "features": [
+                    {"name": "SquareFeet", "type": "numeric", "min_val": 800, "max_val": 5000, "correlation_weight": 0.8},
+                    {"name": "Bedrooms", "type": "numeric", "min_val": 1, "max_val": 5, "correlation_weight": 0.4},
+                    {"name": "Bathrooms", "type": "numeric", "min_val": 1, "max_val": 4, "correlation_weight": 0.5},
+                    {"name": "YearBuilt", "type": "numeric", "min_val": 1950, "max_val": 2025, "correlation_weight": 0.3},
+                    {"name": "Neighborhood", "type": "categorical", "categories": ["Downtown", "Suburbs", "Uptown", "Rural"], "correlation_weight": 0.4}
+                ]
+            }
+
+        # 3. Car Price
+        if any(k in text for k in ["car", "auto", "vehicle", "motor"]):
+            return {
+                "target_column": "Price",
+                "target_type": "continuous",
+                "features": [
+                    {"name": "EngineSize", "type": "numeric", "min_val": 1.0, "max_val": 6.0, "correlation_weight": 0.6},
+                    {"name": "Horsepower", "type": "numeric", "min_val": 80, "max_val": 500, "correlation_weight": 0.8},
+                    {"name": "Year", "type": "numeric", "min_val": 2005, "max_val": 2025, "correlation_weight": 0.4},
+                    {"name": "Mileage", "type": "numeric", "min_val": 5000, "max_val": 200000, "correlation_weight": -0.7},
+                    {"name": "Transmission", "type": "categorical", "categories": ["Automatic", "Manual"], "correlation_weight": -0.2}
+                ]
+            }
+
+        # 4. Customer Churn
+        if any(k in text for k in ["churn", "attrition", "loyalty", "subscriber"]):
+            return {
+                "target_column": "Churn",
+                "target_type": "binary",
+                "features": [
+                    {"name": "TenureMonths", "type": "numeric", "min_val": 1, "max_val": 72, "correlation_weight": -0.6},
+                    {"name": "MonthlyCharges", "type": "numeric", "min_val": 20, "max_val": 120, "correlation_weight": 0.4},
+                    {"name": "SupportCalls", "type": "numeric", "min_val": 0, "max_val": 10, "correlation_weight": 0.7},
+                    {"name": "ContractType", "type": "categorical", "categories": ["Month-to-month", "One year", "Two year"], "correlation_weight": -0.8},
+                    {"name": "InternetService", "type": "categorical", "categories": ["DSL", "Fiber optic", "No"], "correlation_weight": 0.5}
+                ]
+            }
+
+        # 5. Credit Risk
+        if any(k in text for k in ["credit", "default", "loan", "risk", "bank", "finance"]):
+            return {
+                "target_column": "DefaultRisk",
+                "target_type": "binary",
+                "features": [
+                    {"name": "Age", "type": "numeric", "min_val": 18, "max_val": 70, "correlation_weight": -0.2},
+                    {"name": "AnnualIncome", "type": "numeric", "min_val": 20000, "max_val": 150000, "correlation_weight": -0.5},
+                    {"name": "CreditScore", "type": "numeric", "min_val": 300, "max_val": 850, "correlation_weight": -0.8},
+                    {"name": "DebtToIncomeRatio", "type": "numeric", "min_val": 0.05, "max_val": 0.95, "correlation_weight": 0.7},
+                    {"name": "EmploymentYears", "type": "numeric", "min_val": 0, "max_val": 40, "correlation_weight": -0.4}
+                ]
+            }
+
+        # 6. Salary Prediction
+        if any(k in text for k in ["salary", "income", "earnings", "wage", "pay"]):
+            return {
+                "target_column": "Salary",
+                "target_type": "continuous",
+                "features": [
+                    {"name": "YearsExperience", "type": "numeric", "min_val": 0, "max_val": 40, "correlation_weight": 0.9},
+                    {"name": "EducationYears", "type": "numeric", "min_val": 12, "max_val": 22, "correlation_weight": 0.6},
+                    {"name": "ManagementRole", "type": "categorical", "categories": ["Yes", "No"], "correlation_weight": 0.5},
+                    {"name": "CompanySize", "type": "categorical", "categories": ["Startup", "Mid-size", "Enterprise"], "correlation_weight": 0.3}
+                ]
+            }
+
+        # 7. Student Grades
+        if any(k in text for k in ["student", "grade", "score", "exam", "education", "school"]):
+            return {
+                "target_column": "FinalGrade",
+                "target_type": "continuous",
+                "features": [
+                    {"name": "StudyHours", "type": "numeric", "min_val": 0, "max_val": 40, "correlation_weight": 0.8},
+                    {"name": "AttendanceRate", "type": "numeric", "min_val": 0.5, "max_val": 1.0, "correlation_weight": 0.7},
+                    {"name": "SleepHours", "type": "numeric", "min_val": 4, "max_val": 10, "correlation_weight": 0.3},
+                    {"name": "ParentalSupport", "type": "categorical", "categories": ["Low", "Medium", "High"], "correlation_weight": 0.4}
+                ]
+            }
+
+        # 8. Crop Yield
+        if any(k in text for k in ["crop", "yield", "farm", "agriculture", "plant"]):
+            return {
+                "target_column": "Yield",
+                "target_type": "continuous",
+                "features": [
+                    {"name": "Rainfall", "type": "numeric", "min_val": 10, "max_val": 200, "correlation_weight": 0.6},
+                    {"name": "Temperature", "type": "numeric", "min_val": 15, "max_val": 40, "correlation_weight": 0.4},
+                    {"name": "SoilQualityScore", "type": "numeric", "min_val": 10, "max_val": 100, "correlation_weight": 0.8},
+                    {"name": "FertilizerType", "type": "categorical", "categories": ["Organic", "Chemical", "None"], "correlation_weight": 0.3}
+                ]
+            }
+
+        # 9. Weather Temperature
+        if any(k in text for k in ["weather", "temperature", "temp", "rain", "humidity"]):
+            return {
+                "target_column": "Temperature",
+                "target_type": "continuous",
+                "features": [
+                    {"name": "Date", "type": "categorical", "categories": ["DatePlaceHolder"], "correlation_weight": 0.0},
+                    {"name": "Humidity", "type": "numeric", "min_val": 0.1, "max_val": 1.0, "correlation_weight": -0.6},
+                    {"name": "WindSpeed", "type": "numeric", "min_val": 0, "max_val": 50, "correlation_weight": -0.3},
+                    {"name": "Pressure", "type": "numeric", "min_val": 980, "max_val": 1030, "correlation_weight": 0.2}
+                ]
+            }
+
+        # 10. Web Traffic
+        if any(k in text for k in ["traffic", "view", "visitor", "website", "clicks"]):
+            return {
+                "target_column": "PageViews",
+                "target_type": "continuous",
+                "features": [
+                    {"name": "Date", "type": "categorical", "categories": ["DatePlaceHolder"], "correlation_weight": 0.0},
+                    {"name": "MarketingSpend", "type": "numeric", "min_val": 0, "max_val": 5000, "correlation_weight": 0.8},
+                    {"name": "PromoActive", "type": "categorical", "categories": ["Yes", "No"], "correlation_weight": 0.4}
+                ]
+            }
+
+        # 11. Store Sales
+        if any(k in text for k in ["sale", "revenue", "shop", "retail", "store"]):
+            return {
+                "target_column": "Sales",
+                "target_type": "continuous",
+                "features": [
+                    {"name": "Date", "type": "categorical", "categories": ["DatePlaceHolder"], "correlation_weight": 0.0},
+                    {"name": "PromoActive", "type": "categorical", "categories": ["Yes", "No"], "correlation_weight": 0.5},
+                    {"name": "CompetitorDistance", "type": "numeric", "min_val": 100, "max_val": 15000, "correlation_weight": -0.4}
+                ]
+            }
+
+        # 12. Dynamic Fallback by Category
+        if category == "forecasting":
+            return {
+                "target_column": "QuantityDemand",
+                "target_type": "continuous",
+                "features": [
+                    {"name": "Date", "type": "categorical", "categories": ["DatePlaceHolder"], "correlation_weight": 0.0},
+                    {"name": "UnitRate", "type": "numeric", "min_val": 5, "max_val": 200, "correlation_weight": -0.5},
+                    {"name": "IsPromoWeekend", "type": "categorical", "categories": ["Yes", "No"], "correlation_weight": 0.6}
+                ]
+            }
+        elif category == "regression":
+            return {
+                "target_column": "ValueTarget",
+                "target_type": "continuous",
+                "features": [
+                    {"name": "FeatureSize", "type": "numeric", "min_val": 1, "max_val": 1000, "correlation_weight": 0.7},
+                    {"name": "FeatureQuality", "type": "numeric", "min_val": 0.1, "max_val": 9.9, "correlation_weight": 0.6},
+                    {"name": "FeatureRating", "type": "numeric", "min_val": 0, "max_val": 5, "correlation_weight": 0.4},
+                    {"name": "FeatureClass", "type": "categorical", "categories": ["Economy", "Standard", "Premium"], "correlation_weight": 0.5}
+                ]
+            }
+        else:  # classification default
+            return {
+                "target_column": "ClassLabel",
+                "target_type": "binary",
+                "features": [
+                    {"name": "FeatureAge", "type": "numeric", "min_val": 18, "max_val": 90, "correlation_weight": 0.3},
+                    {"name": "FeatureScore", "type": "numeric", "min_val": 0.0, "max_val": 100.0, "correlation_weight": 0.6},
+                    {"name": "FeatureCategory", "type": "categorical", "categories": ["GroupA", "GroupB", "GroupC"], "correlation_weight": -0.4}
+                ]
+            }
+
+    def _generate_data_from_schema(self, schema: Dict[str, Any], n_samples: int = 500) -> pd.DataFrame:
+        """Programmatically generate a dataset matching the given schema layout."""
+        data = {}
+        target_score = np.zeros(n_samples)
+        
+        for feat in schema.get("features", []):
+            name = feat["name"]
+            f_type = feat["type"]
+            weight = feat.get("correlation_weight", 0.0)
+            
+            # Special case for Date
+            if name.lower() == "date":
+                dates = pd.date_range(start="2026-01-01", periods=n_samples, freq="D").strftime("%Y-%m-%d").tolist()
+                data[name] = dates
+                continue
                 
-            df = pd.DataFrame(data)
-            score = (df["Glucose"] * 0.05) + (df["BMI"] * 0.1) - 10
-            probs = 1 / (1 + np.exp(-score))
-            df["Outcome"] = np.random.binomial(1, probs)
-            return df
+            if f_type == "numeric":
+                min_v = feat.get("min_val", 0.0)
+                max_v = feat.get("max_val", 100.0)
+                vals = np.random.uniform(min_v, max_v, size=n_samples)
+                data[name] = np.round(vals, 1 if max_v - min_v < 10 else 0)
+                
+                mean_v = (max_v + min_v) / 2
+                range_v = (max_v - min_v) / 2 if max_v != min_v else 1.0
+                target_score += ((vals - mean_v) / range_v) * weight
+                
+            elif f_type == "categorical":
+                cats = feat.get("categories", ["Low", "Medium", "High"])
+                if not cats or (len(cats) == 1 and cats[0] == "DatePlaceHolder"):
+                    cats = ["Low", "Medium", "High"]
+                vals = np.random.choice(cats, size=n_samples)
+                data[name] = vals
+                
+                mapped = np.array([cats.index(v) for v in vals])
+                mean_v = (len(cats) - 1) / 2
+                range_v = (len(cats) - 1) / 2 if len(cats) > 1 else 1.0
+                target_score += ((mapped - mean_v) / range_v) * weight
+                
+        target_name = schema.get("target_column", "Target")
+        target_type = schema.get("target_type", "binary")
+        
+        if not target_name:
+            target_name = "Target"
             
-        # 2. Customer Churn
-        elif "churn" in name or "churn" in desc or "attrition" in name or "attrition" in desc:
-            data = {
-                "TenureMonths": np.random.randint(1, 72, size=n_samples),
-                "MonthlyCharges": np.round(np.random.uniform(20.0, 120.0, size=n_samples), 2),
-                "ContractType": np.random.choice(["Month-to-month", "One year", "Two year"], size=n_samples, p=[0.5, 0.3, 0.2]),
-                "InternetService": np.random.choice(["DSL", "Fiber optic", "No"], size=n_samples, p=[0.4, 0.4, 0.2]),
-                "PaymentMethod": np.random.choice(["Electronic check", "Mailed check", "Bank transfer", "Credit card"], size=n_samples),
-                "PaperlessBilling": np.random.choice(["Yes", "No"], size=n_samples)
-            }
-            df = pd.DataFrame(data)
-            df["TotalCharges"] = np.round(df["TenureMonths"] * df["MonthlyCharges"] + np.random.normal(0, 10, size=n_samples), 2)
-            
-            score = (df["ContractType"] == "Month-to-month").astype(int) * 2.0 + (df["InternetService"] == "Fiber optic").astype(int) * 1.0 - (df["TenureMonths"] * 0.05)
-            probs = 1 / (1 + np.exp(-score))
-            df["Churn"] = np.random.binomial(1, probs)
-            return df
-
-        # 3. Time Series Forecasting
-        elif category == "forecasting" or any(k in name or k in desc for k in ["stock", "weather", "forecast", "temp", "time", "date"]):
-            # Generate date range
-            dates = pd.date_range(start="2026-01-01", periods=n_samples, freq="D").strftime("%Y-%m-%d").tolist()
-            promo = np.random.choice(["Yes", "No"], size=n_samples, p=[0.2, 0.8])
-            holiday = np.random.choice(["Yes", "No"], size=n_samples, p=[0.05, 0.95])
-            comp_price = np.round(np.random.uniform(10.0, 50.0, size=n_samples), 2)
-            
-            df = pd.DataFrame({
-                "Date": dates,
-                "StorePromo": promo,
-                "Holiday": holiday,
-                "CompetitorPrice": comp_price
-            })
-            
-            # Trend + Seasonality + Promo effect + Random noise
-            time_idx = np.arange(n_samples)
-            seasonality = 50 * np.sin(2 * np.pi * time_idx / 7)
-            trend = 0.2 * time_idx
-            promo_effect = (df["StorePromo"] == "Yes").astype(int) * 100
-            sales = 200 + trend + seasonality + promo_effect + np.random.normal(0, 15, size=n_samples)
-            df["Sales"] = np.round(np.maximum(10, sales), 2)
-            return df
-
-        # 4. House Prices (Regression Default)
-        elif category == "regression" or any(k in name or k in desc for k in ["house", "price", "val", "score", "cost", "salary", "amount"]):
-            sqft = np.random.randint(800, 5000, size=n_samples)
-            bedrooms = np.random.randint(1, 6, size=n_samples)
-            bathrooms = bedrooms + np.random.randint(0, 2, size=n_samples)
-            year_built = np.random.randint(1950, 2025, size=n_samples)
-            neighborhood = np.random.choice(["Downtown", "Suburbs", "Uptown", "Rural"], size=n_samples)
-            
-            data = {
-                "SquareFeet": sqft,
-                "Bedrooms": bedrooms,
-                "Bathrooms": bathrooms,
-                "YearBuilt": year_built,
-                "Neighborhood": neighborhood,
-                "GarageCars": np.random.choice([0, 1, 2, 3], size=n_samples, p=[0.1, 0.3, 0.5, 0.1])
-            }
-            # Add NaNs
-            mask = np.random.choice([True, False], size=n_samples, p=[0.04, 0.96])
-            data["GarageCars"] = np.where(mask, np.nan, data["GarageCars"])
-            
-            df = pd.DataFrame(data)
-            nb_weights = {"Downtown": 50000, "Suburbs": 30000, "Uptown": 75000, "Rural": -20000}
-            nb_add = df["Neighborhood"].map(nb_weights)
-            
-            price = 50000 + (df["SquareFeet"] * 120) + (df["Bedrooms"] * 15000) + (df["Bathrooms"] * 10000) + ((df["YearBuilt"] - 1950) * 1000) + nb_add
-            price += np.random.normal(0, 15000, size=n_samples)
-            df["Price"] = np.round(price, -2)
-            return df
-
-        # 5. Credit Default Prediction (Classification Default)
+        if target_type == "binary":
+            probs = 1 / (1 + np.exp(-target_score))
+            data[target_name] = np.random.binomial(1, probs)
         else:
-            data = {
-                "Age": np.random.randint(18, 70, size=n_samples),
-                "AnnualIncome": np.random.randint(20000, 150000, size=n_samples),
-                "CreditScore": np.random.randint(300, 850, size=n_samples),
-                "DebtToIncomeRatio": np.round(np.random.uniform(0.05, 0.95, size=n_samples), 2),
-                "EmploymentYears": np.random.randint(0, 40, size=n_samples),
-                "LoanAmount": np.random.randint(5000, 50000, size=n_samples),
-                "EducationLevel": np.random.choice(["High School", "Bachelor", "Master", "PhD"], size=n_samples)
-            }
-            # Inject some missing values
-            mask = np.random.choice([True, False], size=n_samples, p=[0.05, 0.95])
-            data["EmploymentYears"] = np.where(mask, np.nan, data["EmploymentYears"])
+            noise = np.random.normal(0, 1.0, size=n_samples)
+            data[target_name] = np.round(200 + (target_score + noise) * 50, 1)
             
-            df = pd.DataFrame(data)
-            score = (df["DebtToIncomeRatio"] * 5.0) - (df["CreditScore"] * 0.01) - (df["EmploymentYears"] * 0.1) + 2.0
-            probs = 1 / (1 + np.exp(-score))
-            df["DefaultRisk"] = np.random.binomial(1, probs)
-            return df
+        # Basic sanity check: inject some missing values to keep cleaner/validator testable
+        df = pd.DataFrame(data)
+        num_cols = list(df.select_dtypes(include=[np.number]).columns)
+        if target_name in num_cols:
+            num_cols.remove(target_name)
+        if num_cols:
+            target_col_to_nan = num_cols[0]
+            mask = np.random.choice([True, False], size=n_samples, p=[0.03, 0.97])
+            df[target_col_to_nan] = np.where(mask, np.nan, df[target_col_to_nan])
+            
+        return df
