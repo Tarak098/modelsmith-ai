@@ -22,12 +22,14 @@ class DatasetRetrievalAgent:
             "sklearn": SklearnAdapter()
         }
 
-    def execute(self, query: str, expected_task: str = "classification") -> Optional[str]:
-        logger.info(f"Starting Intelligent Dataset Retrieval for query: '{query}'")
+    def execute(self, project_id: str, query: str, expected_task: str = "classification") -> Optional[str]:
+        from auto_ai.app.utils.logging import log_agent_action
+        
+        log_agent_action(project_id, "data_collector", "INFO", f"Starting Dataset Search & Retrieval for query: '{query}'")
         
         cached_file = DatasetCache.check(query)
         if cached_file:
-            logger.info(f"Local Cache Hit: {cached_file}")
+            log_agent_action(project_id, "data_collector", "INFO", f"Local Cache Hit. Found matching cached file: {cached_file}")
             return cached_file
             
         priority_str = get_setting("repository_priority") or "cache,openml,kaggle,uci,sklearn"
@@ -35,7 +37,7 @@ class DatasetRetrievalAgent:
         threshold = get_setting_float("dataset_score_threshold", 0.4)
         max_candidates = get_setting_int("max_candidate_datasets", 10)
         
-        logger.info(f"Search settings: priority={priority_list}, threshold={threshold}, max_candidates={max_candidates}")
+        log_agent_action(project_id, "data_collector", "INFO", f"Search configuration loaded: priority={priority_list}, threshold={threshold}")
         
         for repo in priority_list:
             if repo == "cache":
@@ -43,18 +45,18 @@ class DatasetRetrievalAgent:
                 
             is_enabled = get_setting_bool(f"enable_{repo}", True)
             if not is_enabled:
-                logger.info(f"Repository '{repo}' is disabled in settings. Skipping.")
+                log_agent_action(project_id, "data_collector", "INFO", f"Repository '{repo}' is disabled. Skipping.")
                 continue
                 
             adapter = self.adapters.get(repo)
             if not adapter:
                 continue
                 
-            logger.info(f"Searching repository: '{repo}'")
+            log_agent_action(project_id, "data_collector", "INFO", f"Searching remote repository: '{repo}'...")
             try:
                 candidates = adapter.search(query, limit=max_candidates)
                 if not candidates:
-                    logger.info(f"No candidates returned from repository '{repo}'")
+                    log_agent_action(project_id, "data_collector", "INFO", f"No candidate datasets returned from repository '{repo}'")
                     continue
                     
                 ranked_candidates = []
@@ -66,10 +68,10 @@ class DatasetRetrievalAgent:
                 
                 if ranked_candidates:
                     best_score, best_candidate = ranked_candidates[0]
-                    logger.info(f"Best candidate in '{repo}' is '{best_candidate['name']}' with score: {best_score:.3f}")
+                    log_agent_action(project_id, "data_collector", "INFO", f"Repository '{repo}' top candidate: '{best_candidate['name']}' (Score: {best_score:.3f})")
                     
                     if best_score >= threshold:
-                        logger.info(f"Target dataset '{best_candidate['name']}' meets threshold ({best_score:.3f} >= {threshold}). Downloading...")
+                        log_agent_action(project_id, "data_collector", "INFO", f"Candidate '{best_candidate['name']}' meets suitability threshold ({best_score:.3f} >= {threshold}). Downloading dataset...")
                         
                         cache_dir = DatasetCache.get_cache_dir()
                         safe_name = "".join(c for c in best_candidate['name'] if c.isalnum() or c in (' ', '_', '-')).strip().replace(' ', '_').lower()
@@ -79,15 +81,15 @@ class DatasetRetrievalAgent:
                         
                         success = adapter.download(best_candidate["download_url"], str(dest_path))
                         if success and dest_path.exists():
-                            logger.info(f"Successfully downloaded and cached: {dest_path}")
+                            log_agent_action(project_id, "data_collector", "INFO", f"Successfully downloaded and cached: {dest_path.name}")
                             DatasetCache.add(best_candidate['name'], str(dest_path))
                             return str(dest_path)
                         else:
-                            logger.warning(f"Download failed for '{best_candidate['name']}' from '{repo}'. Continuing search.")
+                            log_agent_action(project_id, "data_collector", "WARNING", f"Download failed for '{best_candidate['name']}' from '{repo}'. Continuing search...")
                     else:
-                        logger.info(f"Best candidate score {best_score:.3f} is below threshold {threshold}. Continuing search.")
+                        log_agent_action(project_id, "data_collector", "INFO", f"Top candidate score {best_score:.3f} is below threshold {threshold}. Continuing search...")
             except Exception as e:
-                logger.error(f"Error during retrieval from repository '{repo}': {e}")
+                log_agent_action(project_id, "data_collector", "ERROR", f"Error during retrieval search from repository '{repo}': {e}")
                 
-        logger.warning("No suitable public dataset found above score threshold across all repositories.")
+        log_agent_action(project_id, "data_collector", "WARNING", "No suitable public repository dataset found above suitability score threshold.")
         return None

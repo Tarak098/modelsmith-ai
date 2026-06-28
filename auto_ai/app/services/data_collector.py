@@ -53,7 +53,7 @@ class DataCollectorAgent:
                 
             log_agent_action(project_id, self.agent_name, "INFO", f"Searching public repositories sequentially for topic: '{query_clean}'...")
             retriever = DatasetRetrievalAgent()
-            retrieved_path = retriever.execute(query_clean, expected_task=category)
+            retrieved_path = retriever.execute(project_id, query_clean, expected_task=category)
             
             if retrieved_path and Path(retrieved_path).exists():
                 src_path = Path(retrieved_path)
