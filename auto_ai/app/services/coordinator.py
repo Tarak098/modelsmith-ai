@@ -93,6 +93,9 @@ class CoordinatorAgent:
                 "md_report_path": str(md_report_path)
             }
             
+            # Update category based on any model_selector target auto-correction
+            category = plan.get("category", category)
+            
             # 12. Memory Agent
             summary_metrics = {
                 "description": description,
@@ -105,7 +108,7 @@ class CoordinatorAgent:
             agent_outputs["memory_agent"] = {"status": "memorized"}
             
             log_agent_action(project_id, self.agent_name, "INFO", "Workflow executed successfully. Research completed.")
-            update_project_record(project_id, status="completed")
+            update_project_record(project_id, status="completed", category=category)
             
         except Exception as e:
             error_trace = traceback.format_exc()

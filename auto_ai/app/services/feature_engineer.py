@@ -28,6 +28,35 @@ class FeatureEngineerAgent:
             scalers = {}
             encoders = {}
             
+            # 0. Drop identifier/high-cardinality noise columns (which ruin training generalization/accuracy)
+            cols_to_drop = []
+            for col in df.columns:
+                if col == target_col:
+                    continue
+                col_lower = col.lower()
+                
+                # Never drop date/time columns needed for forecasting
+                if "date" in col_lower or "time" in col_lower:
+                    continue
+                
+                # Check for obvious unique identifier columns (e.g. PassengerId, UUID, Index)
+                is_id_name = any(pat in col_lower for pat in ["id", "uuid", "key", "index", "pk"])
+                unique_pct = df[col].nunique() / len(df)
+                
+                # Check for high-cardinality text columns (like names, descriptions, urls)
+                is_high_card_text = (df[col].dtype.name in ['object', 'category', 'string', 'str']) and unique_pct > 0.6
+                
+                # Check for constant/zero-variance features
+                is_constant = df[col].nunique() <= 1
+                
+                if (is_id_name and df[col].nunique() == len(df)) or is_high_card_text or is_constant:
+                    cols_to_drop.append(col)
+                    
+            if cols_to_drop:
+                df = df.drop(columns=cols_to_drop)
+                log_agent_action(project_id, self.agent_name, "INFO", f"Dropped noise features that degrade generalization/accuracy: {cols_to_drop}")
+                transformations.append(f"Dropped noise features: {cols_to_drop}")
+            
             # 1. Datetime / Lag Feature Extraction for Forecasting
             date_cols = [col for col in df.columns if "date" in col.lower() or "time" in col.lower()]
             if date_cols and category == "forecasting":
@@ -86,7 +115,7 @@ class FeatureEngineerAgent:
             if num_cols:
                 scaler = StandardScaler()
                 scaled_values = scaler.fit_transform(df[num_cols])
-                df[num_cols] = pd.DataFrame(scaled_values, columns=num_cols)
+                df[num_cols] = scaled_values
                 StorageManager.save_model(project_id, scaler, "features_scaler")
                 transformations.append(f"StandardScaled numeric features: {num_cols}")
                 

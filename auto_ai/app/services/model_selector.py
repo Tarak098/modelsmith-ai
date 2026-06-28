@@ -32,6 +32,17 @@ class ModelSelectionAgent:
             X = df.drop(columns=[target_col])
             y = df[target_col]
             
+            # Auto-correct category mismatch to prevent modeling failures and improve accuracy
+            if category == "classification" and pd.api.types.is_numeric_dtype(y) and y.nunique() > 15:
+                log_agent_action(project_id, self.agent_name, "WARNING", f"Target '{target_col}' has high cardinality ({y.nunique()} unique values) for classification. Auto-switching task category to 'regression' to prevent failure.")
+                category = "regression"
+                plan["category"] = "regression"
+                
+            elif category == "regression" and y.nunique() <= 2:
+                log_agent_action(project_id, self.agent_name, "WARNING", f"Target '{target_col}' has only {y.nunique()} unique values. Auto-switching task category to 'classification' to build stronger classifiers.")
+                category = "classification"
+                plan["category"] = "classification"
+            
             # Train-Test Split (80% train, 20% validation)
             X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
             

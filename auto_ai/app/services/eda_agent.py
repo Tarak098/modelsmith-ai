@@ -73,18 +73,44 @@ class EDAAgent:
             raise AgentException(self.agent_name, error_msg)
 
     def _identify_target(self, df: pd.DataFrame, plan: Dict[str, Any]) -> str:
-        """Heuristically identify the label target column in the dataframe."""
-        cols = [c.lower() for c in df.columns]
+        """Identify the target column in the dataframe, leveraging LLM or heuristics."""
+        cols = list(df.columns)
+        desc = plan.get("description", "")
+        name = plan.get("project_name", "")
+        category = plan.get("category", "classification")
         
-        # Check standard targets
-        standard_targets = ["outcome", "target", "price", "churn", "attrition", "label", "class", "close"]
+        prompt = f"""
+        Given the columns of a dataset: {cols}
+        And the user's machine learning goal: "{desc}" (Project: "{name}", Category: {category})
+        Identify which of the column names is the target variable (the label to be predicted).
+        Return ONLY the exact column name as a string, with no quotes, formatting, or extra text.
+        """
+        
+        try:
+            from auto_ai.app.infra.llm import llm_client
+            target_col = llm_client.generate_text(prompt, system_instruction="You are a data architect. Return ONLY the exact column name as plain text.").strip()
+            target_col = target_col.replace('"', '').replace("'", "")
+            if target_col in df.columns:
+                return target_col
+        except Exception as e:
+            from auto_ai.app.utils.logging import logger
+            logger.warning(f"Failed to identify target via LLM: {e}. Falling back to heuristics.")
+
+        # Fallback to Heuristics
+        cols_lower = [c.lower() for c in df.columns]
+        desc_lower = desc.lower()
+        
+        # Check if the description mentions any column name
+        for i, col in enumerate(cols_lower):
+            if col in desc_lower and col not in ["id", "index", "date", "time"]:
+                return df.columns[i]
+                
+        standard_targets = ["outcome", "target", "price", "churn", "attrition", "label", "class", "close", "survived", "defaultrisk"]
         for target in standard_targets:
-            if target in cols:
-                # Return the matching column with original casing
-                idx = cols.index(target)
+            if target in cols_lower:
+                idx = cols_lower.index(target)
                 return df.columns[idx]
                 
-        # Fall back to the last column
         return df.columns[-1]
 
     def _save_correlation_heatmap(self, project_id: str, corr_matrix: pd.DataFrame):
