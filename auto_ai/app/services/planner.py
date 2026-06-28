@@ -40,6 +40,7 @@ class PlannerAgent:
             
             # Execute LLM call
             plan = llm_client.generate_json(prompt, system_instruction="You are a data science architect. Respond only with raw JSON.")
+            plan["description"] = description
             
             category = plan.get("category", "classification")
             project_name = plan.get("project_name", "ML Research Project")

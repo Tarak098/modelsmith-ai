@@ -68,6 +68,11 @@ Inspect data attributes and candidate models using generated interactive charts.
 |---|---|
 | ![Feature Importance](images/feature_importance.png) | ![Residual Analysis](images/residual_plot.png) |
 
+### Dynamic Multi-Category Research Reports
+The system dynamically adapts to **Classification**, **Regression**, and **Time Series Forecasting** tasks, generating customized synthetic datasets, feature engineering steps, evaluation metrics (Accuracy/F1 vs. R2/MAE/RMSE), and plots.
+
+![Full Regression Research Report](images/full_report_screenshot.png)
+
 ### System Settings Configuration
 Connect the platform to Gemini models by inputting Developer API keys and selecting default LLMs.
 
