@@ -116,3 +116,39 @@ def download_project_model(project_id: str):
         media_type="application/octet-stream"
     )
 
+from pydantic import BaseModel
+
+class ConflictResolveRequest(BaseModel):
+    task_type: str
+
+@router.post("/{project_id}/resolve_conflict")
+def resolve_project_conflict(
+    project_id: str,
+    request: ConflictResolveRequest,
+    background_tasks: BackgroundTasks
+):
+    project = get_project_record(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    # Check if project status is actually awaiting_feedback
+    if project["status"] != "awaiting_feedback":
+        raise HTTPException(status_code=400, detail="Project is not awaiting feedback")
+        
+    # Map resolved task type
+    resolved_category = "classification"
+    if "regression" in request.task_type.lower() or "forecasting" in request.task_type.lower():
+        resolved_category = "regression"
+        
+    update_project_record(project_id, status="running", category=resolved_category)
+    
+    background_tasks.add_task(
+        coordinator.run_workflow,
+        project_id=project_id,
+        name=project["name"],
+        description=project["description"],
+        user_selected_category=resolved_category
+    )
+    
+    return {"status": "resumed", "category": resolved_category}
+

@@ -144,14 +144,36 @@
                         <div id="project-status-badge" class="status-badge running">RUNNING</div>
                     </div>
                 </div>
+
+                <!-- Conflict Resolution Panel -->
+                <div id="conflict-resolution-panel" class="glass-card" style="display: none; padding: 16px 24px; border: 2px solid var(--secondary-color); margin-bottom: 16px; background: rgba(59, 130, 246, 0.05);">
+                    <h3 style="margin-top: 0; color: #f59e0b; display: flex; align-items: center; gap: 8px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01"></path></svg>
+                        ML Task Type Conflict Detected
+                    </h3>
+                    <p style="font-size: 0.9rem; margin-bottom: 12px;" id="conflict-message-display">Checking target labels against prompt keywords...</p>
+                    <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                        <label for="conflict-resolve-select" style="font-size: 0.85rem; font-weight: bold;">Select Target Task Type:</label>
+                        <select id="conflict-resolve-select" class="form-control" style="width: auto; max-width: 250px; display: inline-block;">
+                            <option value="binary_classification">Binary Classification</option>
+                            <option value="multiclass_classification">Multi-class Classification</option>
+                            <option value="regression">Regression</option>
+                            <option value="forecasting">Time Series Forecasting</option>
+                            <option value="clustering">Clustering</option>
+                            <option value="anomaly_detection">Anomaly Detection</option>
+                        </select>
+                        <button class="btn" onclick="submitResolveConflict(event)" style="padding: 8px 16px;">Resolve & Resume Run</button>
+                    </div>
+                </div>
                 
                 <!-- Workflow timeline node graph -->
                 <div class="glass-card" style="padding: 16px 24px;">
                     <h3 style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 8px;">Multi-Agent Pipeline Timeline</h3>
-                    <div class="workflow-nodes-container">
-                        <div class="workflow-line"></div>
-                        <div class="node" id="node-planner"><div class="node-label">Planner</div>P</div>
-                        <div class="node" id="node-data_collector"><div class="node-label">Collector</div>C</div>
+                    <div class="workflow-nodes-container" style="flex-wrap: wrap; gap: 12px;">
+                        <div class="node" id="node-planner"><div class="node-label">Planner</div>Pl</div>
+                        <div class="node" id="node-dataset_retriever"><div class="node-label">Retrieval</div>R</div>
+                        <div class="node" id="node-dataset_intelligence"><div class="node-label">Intel</div>Di</div>
+                        <div class="node" id="node-automl_strategy"><div class="node-label">Strategy</div>As</div>
                         <div class="node" id="node-data_validator"><div class="node-label">Validator</div>V</div>
                         <div class="node" id="node-data_cleaner"><div class="node-label">Cleaner</div>Cl</div>
                         <div class="node" id="node-eda_agent"><div class="node-label">EDA</div>E</div>
@@ -160,7 +182,7 @@
                         <div class="node" id="node-hyperparameter_tuner"><div class="node-label">Tuning</div>T</div>
                         <div class="node" id="node-evaluator"><div class="node-label">Evaluator</div>Ev</div>
                         <div class="node" id="node-explainability"><div class="node-label">Explainability</div>Ex</div>
-                        <div class="node" id="node-report_generator"><div class="node-label">Report</div>R</div>
+                        <div class="node" id="node-report_generator"><div class="node-label">Report</div>Re</div>
                         <div class="node" id="node-memory_agent"><div class="node-label">Memory</div>M</div>
                     </div>
                 </div>
@@ -258,21 +280,93 @@
             <div id="settings-view" class="view-panel">
                 <div class="view-title">System Settings Configuration</div>
                 
-                <div class="glass-card" style="max-width: 600px;">
+                <div class="glass-card" style="max-width: 900px;">
                     <form id="settings-form" onsubmit="saveSettings(event)">
-                        <div class="form-group">
-                            <label for="set-key">Gemini Developer API Key</label>
-                            <input type="password" id="set-key" class="form-control" placeholder="API Key starting with AQ...">
-                            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px;">Note: Key can be loaded from the shell system environment variables as well.</p>
+                        <h3 style="font-size: 1.1rem; color: var(--secondary-color); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; margin-bottom: 16px;">Core API Configuration</h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                            <div class="form-group">
+                                <label for="set-key">Gemini Developer API Key</label>
+                                <input type="password" id="set-key" class="form-control" placeholder="API Key starting with AQ...">
+                            </div>
+                            <div class="form-group">
+                                <label for="set-model">Default LLM Model Name</label>
+                                <select id="set-model" class="form-control">
+                                    <option value="gemini-2.5-flash">gemini-2.5-flash (Fast, Default)</option>
+                                    <option value="gemini-2.5-pro">gemini-2.5-pro (High intelligence)</option>
+                                    <option value="gemini-1.5-flash">gemini-1.5-flash (Legacy fallback)</option>
+                                </select>
+                            </div>
                         </div>
-                        
-                        <div class="form-group">
-                            <label for="set-model">Default LLM Model Name</label>
-                            <select id="set-model" class="form-control">
-                                <option value="gemini-2.5-flash">gemini-2.5-flash (Fast, Default)</option>
-                                <option value="gemini-2.5-pro">gemini-2.5-pro (High intelligence)</option>
-                                <option value="gemini-1.5-flash">gemini-1.5-flash (Legacy fallback)</option>
-                            </select>
+
+                        <h3 style="font-size: 1.1rem; color: var(--secondary-color); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; margin-bottom: 16px;">Repository Search & API Integration</h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                            <div class="form-group">
+                                <label style="display: block; margin-bottom: 8px;">Enabled Data Sources</label>
+                                <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                                    <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
+                                        <input type="checkbox" id="set-enable-openml"> OpenML
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
+                                        <input type="checkbox" id="set-enable-kaggle"> Kaggle API
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
+                                        <input type="checkbox" id="set-enable-uci"> UCI Repository
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="set-priority">Search Priority Order</label>
+                                <input type="text" id="set-priority" class="form-control" placeholder="cache,openml,kaggle,uci,sklearn">
+                            </div>
+                            <div class="form-group">
+                                <label for="set-kaggle-user">Kaggle Username</label>
+                                <input type="text" id="set-kaggle-user" class="form-control" placeholder="Kaggle user ID">
+                            </div>
+                            <div class="form-group">
+                                <label for="set-kaggle-key">Kaggle API Token / Key</label>
+                                <input type="password" id="set-kaggle-key" class="form-control" placeholder="Kaggle secret key">
+                            </div>
+                            <div class="form-group">
+                                <label for="set-threshold">Minimum Suitability Score</label>
+                                <input type="number" id="set-threshold" class="form-control" step="0.05" min="0" max="1" placeholder="e.g. 0.4">
+                            </div>
+                            <div class="form-group">
+                                <label for="set-max-datasets">Max Search Candidates</label>
+                                <input type="number" id="set-max-datasets" class="form-control" min="1" placeholder="e.g. 10">
+                            </div>
+                        </div>
+
+                        <h3 style="font-size: 1.1rem; color: var(--secondary-color); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; margin-bottom: 16px;">AutoML & Resource Time Budgets</h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                            <div class="form-group">
+                                <label for="set-max-training">Max Model Training Time (sec)</label>
+                                <input type="number" id="set-max-training" class="form-control" min="10" placeholder="e.g. 300">
+                            </div>
+                            <div class="form-group">
+                                <label for="set-max-project">Max Total Project Time (sec)</label>
+                                <input type="number" id="set-max-project" class="form-control" min="60" placeholder="e.g. 1200">
+                            </div>
+                            <div class="form-group">
+                                <label for="set-max-retries">Max Pipeline Retry Attempts</label>
+                                <input type="number" id="set-max-retries" class="form-control" min="0" placeholder="e.g. 5">
+                            </div>
+                            <div class="form-group">
+                                <label for="set-cv-folds">Cross Validation Folds (CV)</label>
+                                <input type="number" id="set-cv-folds" class="form-control" min="2" max="10" placeholder="e.g. 3">
+                            </div>
+                        </div>
+
+                        <h3 style="font-size: 1.1rem; color: var(--secondary-color); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; margin-bottom: 16px;">Advanced Intelligence Agents</h3>
+                        <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 24px;">
+                            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
+                                <input type="checkbox" id="set-enable-strategy"> Enable AutoML Strategy Agent
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
+                                <input type="checkbox" id="set-enable-memory"> Enable Historical Memory Reuse
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer;">
+                                <input type="checkbox" id="set-enable-leakage"> Enable Data Leakage Detection
+                            </label>
                         </div>
                         
                         <button type="submit" class="btn">Save Configuration</button>

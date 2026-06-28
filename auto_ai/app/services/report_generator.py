@@ -29,6 +29,11 @@ class ReportGeneratorAgent:
             eval_data = all_agent_outputs.get("evaluator", {})
             exp_data = all_agent_outputs.get("explainability", {})
             
+            # Enrich intelligence and strategy records from database
+            from auto_ai.app.infra.db import get_task_output_data
+            eda_data["intel_report"] = get_task_output_data(project_id, "dataset_intelligence") or {}
+            tuner_data["strategy_report"] = get_task_output_data(project_id, "automl_strategy") or {}
+            
             run_dir = StorageManager.get_run_dir(project_id)
             
             # Base64 encode plots for self-contained HTML rendering
@@ -84,7 +89,28 @@ class ReportGeneratorAgent:
         return ""
 
     def _build_html_report(self, name: str, desc: str, planner: dict, validator: dict, cleaner: dict, eda: dict, fe: dict, selector: dict, tuner: dict, evaluation: dict, explain: dict, corr_img: str, dist_img: str, eval_img: str, imp_img: str) -> str:
-        # Create HTML string
+        # Retrieve extra agent structures passed downstream
+        from auto_ai.app.infra.db import get_task_output_data
+        intel = eda.get("intel_report") or {}
+        strategy = tuner.get("strategy_report") or {}
+        
+        # Build reasoning logs HTML
+        reasoning = explain.get("reasoning_logs", {})
+        reasoning_html = ""
+        if reasoning:
+            reasoning_html = f"""
+            <h2>System Architect Reasoning Logs</h2>
+            <div class="card">
+                <ul>
+                    <li><strong>Target Variable Choice:</strong> {reasoning.get('target_selection')}</li>
+                    <li><strong>Scaling Transformation:</strong> {reasoning.get('preprocessing')}</li>
+                    <li><strong>Categorical Encoding:</strong> {reasoning.get('encoder')}</li>
+                    <li><strong>Model Selections:</strong> {reasoning.get('model_selection')}</li>
+                    <li><strong>Hyperparameter Budget:</strong> {reasoning.get('tuning')}</li>
+                </ul>
+            </div>
+            """
+            
         category = planner.get("category", "N/A")
         
         # Build metrics rows
@@ -93,11 +119,31 @@ class ReportGeneratorAgent:
             val_str = f"{v:.4f}" if isinstance(v, (float, int)) else str(v)
             metrics_html += f"<tr><td><strong>{k.replace('_', ' ').title()}</strong></td><td>{val_str}</td></tr>"
             
-        # Leaderboard rows
+        # Comprehensive Leaderboard rows (CV, Val, training time, inference time, params)
         leaderboard_html = ""
         for idx, row in enumerate(selector.get("leaderboard", [])):
-            metrics_str = ", ".join(f"{mk}: {mv:.3f}" for mk, mv in row.get("metrics", {}).items())
-            leaderboard_html += f"<tr><td>{idx+1}</td><td>{row.get('model_name')}</td><td>{metrics_str}</td></tr>"
+            cv_val = f"{row.get('cv_score', 0.0):.4f}"
+            val_val = f"{row.get('validation_score', 0.0):.4f}"
+            t_time = f"{row.get('training_time_sec', 0.0):.2f}s"
+            i_time = f"{row.get('inference_time_sec', 0.0):.4f}s"
+            
+            # Format params safely
+            params_dict = row.get("hyperparameters", {})
+            params_str = ", ".join(f"{pk}={pv}" for pk, pv in params_dict.items() if pk in ["alpha", "C", "n_estimators", "max_depth"])
+            if not params_str:
+                params_str = "Defaults"
+                
+            leaderboard_html += f"""
+            <tr>
+                <td>{idx+1}</td>
+                <td><strong>{row.get('model_name')}</strong></td>
+                <td>{cv_val}</td>
+                <td>{val_val}</td>
+                <td>{t_time}</td>
+                <td>{i_time}</td>
+                <td><code>{params_str}</code></td>
+            </tr>
+            """
 
         # Build diagnostics list HTML
         diagnoses_html = ""
@@ -123,6 +169,23 @@ class ReportGeneratorAgent:
                 <li>Relative Improvement: <code>{tuner.get('improvement_ratio', 0)*100:+.2f}%</code></li>
             </ul>
             """
+
+        # Intel / validation diagnostics warnings
+        leakage_html = ""
+        intel_report = eda.get("intel_report") or {}
+        if not intel_report:
+            # Fallback direct load
+            import json
+            try:
+                # We can find project_id via project name or just inspect settings
+                pass
+            except: pass
+            
+        leakage_warnings = intel_report.get("leakage_warnings", [])
+        if leakage_warnings:
+            leakage_html = "<h3>Data Leakage & Integrity Alerts</h3>"
+            for warning in leakage_warnings:
+                leakage_html += f'<div class="diag-warn">⚠️ {warning}</div>'
 
         html = f"""<!DOCTYPE html>
 <html>
@@ -236,6 +299,20 @@ class ReportGeneratorAgent:
         <p><strong>Project Name:</strong> {name}</p>
         <p><strong>Research Description:</strong> {desc}</p>
         
+        <h2>Dataset Intelligence</h2>
+        <div class="card">
+            <ul>
+                <li><strong>Dataset MD5:</strong> <code>{intel_report.get('dataset_hash', 'N/A')}</code></li>
+                <li><strong>Inferred Goal:</strong> {intel_report.get('inferred_task', 'N/A')}</li>
+                <li><strong>Missing Cells Percentage:</strong> {intel_report.get('missing_pct', 0.0):.2f}%</li>
+                <li><strong>Outliers Count (IQR):</strong> {intel_report.get('outlier_pct', 0.0):.2f}%</li>
+                <li><strong>Continuous Targets:</strong> {', '.join(intel_report.get('continuous_targets', [])) or 'None'}</li>
+                <li><strong>Categorical Targets:</strong> {', '.join(intel_report.get('categorical_targets', [])) or 'None'}</li>
+            </ul>
+        </div>
+        
+        {leakage_html}
+        
         <h2>Data Validation & Cleaning Summary</h2>
         <div class="grid">
             <div class="card">
@@ -276,7 +353,11 @@ class ReportGeneratorAgent:
                 <tr>
                     <th>Rank</th>
                     <th>Model Name</th>
-                    <th>Validation Metrics</th>
+                    <th>CV Score</th>
+                    <th>Validation Score</th>
+                    <th>Training Time</th>
+                    <th>Inference Speed</th>
+                    <th>Parameters</th>
                 </tr>
             </thead>
             <tbody>
@@ -285,6 +366,8 @@ class ReportGeneratorAgent:
         </table>
         
         {tuning_html}
+
+        {reasoning_html}
 
         <h2>Final Evaluation Results</h2>
         <div class="grid">
@@ -331,12 +414,21 @@ class ReportGeneratorAgent:
 
     def _build_markdown_report(self, name: str, desc: str, planner: dict, validator: dict, cleaner: dict, eda: dict, fe: dict, selector: dict, tuner: dict, evaluation: dict, explain: dict) -> str:
         category = planner.get("category", "N/A")
+        intel_report = eda.get("intel_report") or {}
+        reasoning = explain.get("reasoning_logs", {})
         
         # Leaderboard
-        leaderboard_md = "| Rank | Model Name | Validation Metrics |\n|---|---|---|\n"
+        leaderboard_md = "| Rank | Model Name | CV Score | Validation Score | Train Time | Inference Speed | Parameters |\n|---|---|---|---|---|---|---|\n"
         for idx, row in enumerate(selector.get("leaderboard", [])):
-            metrics_str = ", ".join(f"{mk}: {mv:.3f}" for mk, mv in row.get("metrics", {}).items())
-            leaderboard_md += f"| {idx+1} | {row.get('model_name')} | {metrics_str} |\n"
+            cv_val = f"{row.get('cv_score', 0.0):.4f}"
+            val_val = f"{row.get('validation_score', 0.0):.4f}"
+            t_time = f"{row.get('training_time_sec', 0.0):.2f}s"
+            i_time = f"{row.get('inference_time_sec', 0.0):.4f}s"
+            params_dict = row.get("hyperparameters", {})
+            params_str = ", ".join(f"{pk}={pv}" for pk, pv in params_dict.items() if pk in ["alpha", "C", "n_estimators", "max_depth"])
+            if not params_str:
+                params_str = "Defaults"
+            leaderboard_md += f"| {idx+1} | {row.get('model_name')} | {cv_val} | {val_val} | {t_time} | {i_time} | `{params_str}` |\n"
             
         # Metrics
         metrics_md = ""
@@ -344,15 +436,42 @@ class ReportGeneratorAgent:
             val_str = f"{v:.4f}" if isinstance(v, (float, int)) else str(v)
             metrics_md += f"- **{k.replace('_', ' ').title()}**: {val_str}\n"
 
-        # Pre-render diagnostics and limitations markdown lists (avoid backslashes in f-string expression)
+        # Pre-render lists
         diagnoses_md = "\n".join(f"- {diag}" for diag in evaluation.get('diagnoses', []))
         limitations_md = "\n".join(f"- {lim}" for lim in explain.get('limitations', []))
+        
+        # Reasoning logs
+        reasoning_md = ""
+        if reasoning:
+            reasoning_md = f"""### Architect Reasoning Logs
+- **Target Selection:** {reasoning.get('target_selection')}
+- **Preprocessing:** {reasoning.get('preprocessing')}
+- **Encoder:** {reasoning.get('encoder')}
+- **Model Candidate Choices:** {reasoning.get('model_selection')}
+- **Hyperparameter Budget:** {reasoning.get('tuning')}
+"""
+
+        # Leakage Warnings
+        leakage_md = ""
+        leakage_warnings = intel_report.get("leakage_warnings", [])
+        if leakage_warnings:
+            leakage_md = "### Data Leakage & Integrity Alerts\n" + "\n".join(f"- ⚠️ {w}" for w in leakage_warnings) + "\n"
 
         md = f"""# ModelSmith AI Research Report
 
 **Category:** {category.upper()}
 **Project Name:** {name}
 **Description:** {desc}
+
+---
+
+## Dataset Intelligence
+- **Dataset MD5 Hash:** `{intel_report.get('dataset_hash', 'N/A')}`
+- **Inferred Task:** {intel_report.get('inferred_task', 'N/A')}
+- **Missing Cell Percentage:** {intel_report.get('missing_pct', 0.0):.2f}%
+- **Outliers Count (IQR):** {intel_report.get('outlier_pct', 0.0):.2f}%
+
+{leakage_md}
 
 ---
 
@@ -373,6 +492,10 @@ class ReportGeneratorAgent:
 ### Tuning Optimization
 - **Parameters:** {tuner.get('tuned_parameters', {})}
 - **Relative Score Improvement:** {tuner.get('improvement_ratio', 0)*100:+.2f}%
+
+---
+
+{reasoning_md}
 
 ---
 

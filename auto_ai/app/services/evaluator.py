@@ -39,6 +39,40 @@ class EvaluationAgent:
             # Split same way
             X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
             
+            from sklearn.preprocessing import RobustScaler
+            from auto_ai.app.infra.db import get_task_output_data
+            model_select_summary = get_task_output_data(project_id, "model_selector") or {}
+            
+            best_attempt = model_select_summary.get("best_attempt", 1)
+            trained_features = model_select_summary.get("best_trained_features", [])
+            
+            if best_attempt == 2:
+                num_cols = list(X.select_dtypes(include=[np.number]).columns)
+                num_cols = [c for c in num_cols if c in trained_features]
+                if num_cols:
+                    scaler = RobustScaler()
+                    X_train_processed = X_train.copy()
+                    X_val_processed = X_val.copy()
+                    X_train_processed[num_cols] = scaler.fit_transform(X_train[num_cols])
+                    X_val_processed[num_cols] = scaler.transform(X_val[num_cols])
+                    X_train, X_val = X_train_processed, X_val_processed
+            elif best_attempt == 3:
+                num_cols = list(X.select_dtypes(include=[np.number]).columns)
+                num_cols = [c for c in num_cols if c in trained_features]
+                X_train_processed = X_train.copy()
+                X_val_processed = X_val.copy()
+                for col in num_cols:
+                    skew = X_train[col].skew()
+                    if abs(skew) > 1.0 and X_train[col].min() >= 0:
+                        X_train_processed[col] = np.log1p(X_train[col])
+                        X_val_processed[col] = np.log1p(X_val[col].clip(lower=0))
+                X_train, X_val = X_train_processed, X_val_processed
+                
+            if trained_features:
+                valid_features = [c for c in trained_features if c in X_train.columns]
+                X_train = X_train[valid_features]
+                X_val = X_val[valid_features]
+            
             # Predict
             train_preds = best_model.predict(X_train)
             val_preds = best_model.predict(X_val)

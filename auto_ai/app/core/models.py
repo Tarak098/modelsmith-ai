@@ -55,7 +55,45 @@ class LogResponse(BaseModel):
 class SettingsUpdate(BaseModel):
     gemini_api_key: Optional[str] = None
     default_model: Optional[str] = None
+    enable_openml: Optional[bool] = None
+    enable_kaggle: Optional[bool] = None
+    enable_uci: Optional[bool] = None
+    max_datasets: Optional[int] = None
+    cache_dir: Optional[str] = None
+    max_cache_size_mb: Optional[int] = None
+    timeout_sec: Optional[int] = None
+    kaggle_username: Optional[str] = None
+    kaggle_key: Optional[str] = None
+    max_training_time: Optional[int] = None
+    max_project_time: Optional[int] = None
+    max_retries: Optional[int] = None
+    repository_priority: Optional[str] = None
+    dataset_score_threshold: Optional[float] = None
+    max_candidate_datasets: Optional[int] = None
+    cv_folds: Optional[int] = None
+    enable_automl_strategy: Optional[bool] = None
+    enable_memory_reuse: Optional[bool] = None
+    enable_data_leakage_detection: Optional[bool] = None
 
 class SettingsResponse(BaseModel):
     gemini_api_key: str
     default_model: str
+    enable_openml: bool
+    enable_kaggle: bool
+    enable_uci: bool
+    max_datasets: int
+    cache_dir: str
+    max_cache_size_mb: int
+    timeout_sec: int
+    kaggle_username: str
+    kaggle_key: str
+    max_training_time: int
+    max_project_time: int
+    max_retries: int
+    repository_priority: str
+    dataset_score_threshold: float
+    max_candidate_datasets: int
+    cv_folds: int
+    enable_automl_strategy: bool
+    enable_memory_reuse: bool
+    enable_data_leakage_detection: bool

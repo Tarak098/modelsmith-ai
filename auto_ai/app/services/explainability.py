@@ -24,7 +24,13 @@ class ExplainabilityAgent:
         try:
             df = pd.read_csv(engineered_file_path)
             target_col = eda_report["target_column"]
-            feature_names = [col for col in df.columns if col != target_col]
+            from auto_ai.app.infra.db import get_task_output_data
+            model_select_summary = get_task_output_data(project_id, "model_selector") or {}
+            trained_features = model_select_summary.get("best_trained_features", [])
+            if trained_features:
+                feature_names = [c for c in trained_features if c in df.columns]
+            else:
+                feature_names = [col for col in df.columns if col != target_col]
             
             importances = []
             
@@ -57,10 +63,25 @@ class ExplainabilityAgent:
             limitations = self._get_model_limitations(best_model_name)
             explanation = self._generate_explanation(best_model_name, sorted_imp[:3])
             
+            # 5. Extract strategy and intelligence reasoning logs (Improvement 12)
+            from auto_ai.app.infra.db import get_task_output_data
+            strategy = get_task_output_data(project_id, "automl_strategy") or {}
+            intel = get_task_output_data(project_id, "dataset_intelligence") or {}
+            category = intel.get("inferred_task", "classification")
+            
+            reasoning_logs = {
+                "target_selection": f"Target column '{target_col}' was automatically selected by analyzing column names against the problem context description.",
+                "preprocessing": strategy.get("scaler_reason", "StandardScaler was chosen to normalize numeric distributions."),
+                "encoder": strategy.get("encoder_reason", "OneHotEncoder was chosen to process categorical features."),
+                "model_selection": strategy.get("model_selection_reason", f"Selected matching model candidate architectures for the '{category}' task."),
+                "tuning": strategy.get("tuning_reason", "Hyperparameter tuning budget scaled dynamically to stay within the training time budget.")
+            }
+            
             report = {
                 "feature_importances": {k: float(v) for k, v in sorted_imp},
                 "limitations": limitations,
                 "natural_language_explanation": explanation,
+                "reasoning_logs": reasoning_logs,
                 "charts": {
                     "feature_importance": "plots/feature_importance.png"
                 }

@@ -6,6 +6,7 @@ from auto_ai.app.infra.storage import StorageManager
 from auto_ai.app.infra.db import save_agent_task_record
 from auto_ai.app.utils.logging import log_agent_action
 from auto_ai.app.utils.exceptions import AgentException
+from auto_ai.app.services.dataset_retriever import DatasetRetrievalAgent
 
 class DataCollectorAgent:
     def __init__(self):
@@ -36,15 +37,34 @@ class DataCollectorAgent:
                 })
                 return dest_path
                 
-            # Case 2: No file provided -> Generate Domain-Specific Synthetic Dataset
-            log_agent_action(project_id, self.agent_name, "WARNING", "No dataset uploaded. Generating realistic synthetic dataset for ML execution.")
-            
+            # Case 2: Attempt public repository dataset retrieval first
+            desc = plan.get("description", "")
             category = plan.get("category", "classification")
             name = plan.get("project_name", "").lower()
-            desc = plan.get("description", "").lower()
+            
+            log_agent_action(project_id, self.agent_name, "INFO", "No dataset uploaded. Searching public repositories sequentially...")
+            retriever = DatasetRetrievalAgent()
+            retrieved_path = retriever.execute(desc, expected_task=category)
+            
+            if retrieved_path and Path(retrieved_path).exists():
+                src_path = Path(retrieved_path)
+                dest_filename = "raw_data.csv"
+                dest_path = StorageManager.copy_file_to_run(project_id, src_path, dest_filename)
+                log_agent_action(project_id, self.agent_name, "INFO", f"Successfully retrieved public dataset for '{desc}'. Source: Cached/Downloaded CSV.")
+                
+                df = pd.read_csv(dest_path)
+                save_agent_task_record(project_id, self.agent_name, "completed", output_data={
+                    "source": "retrieved_public_repository",
+                    "rows": len(df),
+                    "cols": len(df.columns),
+                    "columns": list(df.columns)
+                })
+                return dest_path
+                
+            # Case 3: Fallback -> Generate Domain-Specific Synthetic Dataset
+            log_agent_action(project_id, self.agent_name, "WARNING", "No public dataset found above suitability score. Generating realistic synthetic dataset.")
             
             df = self._generate_synthetic_data(project_id, name, category, desc)
-            
             dest_path = StorageManager.save_dataset(project_id, df, "raw_data.csv")
             
             log_agent_action(

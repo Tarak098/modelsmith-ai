@@ -76,15 +76,33 @@ def init_db():
     """)
     
     # Set default settings if not already present
-    cursor.execute("SELECT COUNT(*) FROM settings")
-    if cursor.fetchone()[0] == 0:
+    defaults = {
+        "gemini_api_key": settings.GEMINI_API_KEY,
+        "default_model": settings.DEFAULT_MODEL,
+        "enable_openml": "true",
+        "enable_kaggle": "true",
+        "enable_uci": "true",
+        "max_datasets": "10",
+        "cache_dir": "data/cache",
+        "max_cache_size_mb": "500",
+        "timeout_sec": "30",
+        "kaggle_username": "",
+        "kaggle_key": "",
+        "max_training_time": "300",
+        "max_project_time": "1200",
+        "max_retries": "5",
+        "repository_priority": "cache,openml,kaggle,uci,sklearn",
+        "dataset_score_threshold": "0.4",
+        "max_candidate_datasets": "10",
+        "cv_folds": "3",
+        "enable_automl_strategy": "true",
+        "enable_memory_reuse": "true",
+        "enable_data_leakage_detection": "true"
+    }
+    for k, v in defaults.items():
         cursor.execute(
-            "INSERT INTO settings (setting_key, setting_value) VALUES (?, ?)",
-            ("gemini_api_key", settings.GEMINI_API_KEY)
-        )
-        cursor.execute(
-            "INSERT INTO settings (setting_key, setting_value) VALUES (?, ?)",
-            ("default_model", settings.DEFAULT_MODEL)
+            "INSERT OR IGNORE INTO settings (setting_key, setting_value) VALUES (?, ?)",
+            (k, str(v))
         )
     
     conn.commit()
@@ -241,3 +259,41 @@ def set_setting(key: str, value: str):
         settings.GEMINI_API_KEY = value
     elif key == "default_model":
         settings.DEFAULT_MODEL = value
+
+def get_setting_bool(key: str, default: bool = True) -> bool:
+    val = get_setting(key)
+    if val == "":
+        return default
+    return val.lower() == "true"
+
+def get_setting_int(key: str, default: int = 0) -> int:
+    val = get_setting(key)
+    if val == "":
+        return default
+    try:
+        return int(val)
+    except:
+        return default
+
+def get_setting_float(key: str, default: float = 0.0) -> float:
+    val = get_setting(key)
+    if val == "":
+        return default
+    try:
+        return float(val)
+    except:
+        return default
+
+def get_task_output_data(project_id: str, agent_name: str) -> dict:
+    import json
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT output_data FROM agent_tasks WHERE project_id = ? AND agent_name = ?", (project_id, agent_name))
+    row = cursor.fetchone()
+    conn.close()
+    if row and row[0]:
+        try:
+            return json.loads(row[0])
+        except:
+            pass
+    return {}

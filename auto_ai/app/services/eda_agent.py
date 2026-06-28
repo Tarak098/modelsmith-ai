@@ -27,7 +27,11 @@ class EDAAgent:
             cols = list(df.columns)
             
             # 1. Identify Target Column
-            target_col = self._identify_target(df, plan)
+            from auto_ai.app.infra.db import get_task_output_data
+            intel_data = get_task_output_data(project_id, "dataset_intelligence")
+            target_col = intel_data.get("target_col") if intel_data else None
+            if not target_col or target_col not in cols:
+                target_col = self._identify_target(df, plan)
             log_agent_action(project_id, self.agent_name, "INFO", f"Identified target column: '{target_col}'")
             
             # 2. Basic Stats
@@ -56,6 +60,7 @@ class EDAAgent:
                 "categorical_columns": categorical_cols,
                 "summary_stats": summary_stats,
                 "insights": insights,
+                "intel_report": intel_data,
                 "charts": {
                     "correlation_heatmap": f"plots/correlation_heatmap.png",
                     "target_distribution": f"plots/target_distribution.png"

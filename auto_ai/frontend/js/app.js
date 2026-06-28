@@ -96,6 +96,21 @@ async function loadSettings() {
             const data = await res.json();
             document.getElementById('set-key').value = data.gemini_api_key;
             document.getElementById('set-model').value = data.default_model;
+            document.getElementById('set-enable-openml').checked = data.enable_openml;
+            document.getElementById('set-enable-kaggle').checked = data.enable_kaggle;
+            document.getElementById('set-enable-uci').checked = data.enable_uci;
+            document.getElementById('set-max-datasets').value = data.max_datasets;
+            document.getElementById('set-priority').value = data.repository_priority;
+            document.getElementById('set-kaggle-user').value = data.kaggle_username;
+            document.getElementById('set-kaggle-key').value = data.kaggle_key;
+            document.getElementById('set-threshold').value = data.dataset_score_threshold;
+            document.getElementById('set-max-training').value = data.max_training_time;
+            document.getElementById('set-max-project').value = data.max_project_time;
+            document.getElementById('set-max-retries').value = data.max_retries;
+            document.getElementById('set-cv-folds').value = data.cv_folds;
+            document.getElementById('set-enable-strategy').checked = data.enable_automl_strategy;
+            document.getElementById('set-enable-memory').checked = data.enable_memory_reuse;
+            document.getElementById('set-enable-leakage').checked = data.enable_data_leakage_detection;
         }
     } catch (e) {
         console.error("Failed to load settings: ", e);
@@ -106,12 +121,45 @@ async function saveSettings(event) {
     event.preventDefault();
     const key = document.getElementById('set-key').value;
     const model = document.getElementById('set-model').value;
+    const enableOpenML = document.getElementById('set-enable-openml').checked;
+    const enableKaggle = document.getElementById('set-enable-kaggle').checked;
+    const enableUCI = document.getElementById('set-enable-uci').checked;
+    const maxDatasets = parseInt(document.getElementById('set-max-datasets').value) || 10;
+    const priority = document.getElementById('set-priority').value;
+    const kaggleUser = document.getElementById('set-kaggle-user').value;
+    const kaggleKey = document.getElementById('set-kaggle-key').value;
+    const threshold = parseFloat(document.getElementById('set-threshold').value) || 0.4;
+    const maxTraining = parseInt(document.getElementById('set-max-training').value) || 300;
+    const maxProject = parseInt(document.getElementById('set-max-project').value) || 1200;
+    const maxRetries = parseInt(document.getElementById('set-max-retries').value) || 5;
+    const cvFolds = parseInt(document.getElementById('set-cv-folds').value) || 3;
+    const enableStrategy = document.getElementById('set-enable-strategy').checked;
+    const enableMemory = document.getElementById('set-enable-memory').checked;
+    const enableLeakage = document.getElementById('set-enable-leakage').checked;
     
     try {
         const res = await fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: jsonStringify({ gemini_api_key: key, default_model: model })
+            body: jsonStringify({
+                gemini_api_key: key,
+                default_model: model,
+                enable_openml: enableOpenML,
+                enable_kaggle: enableKaggle,
+                enable_uci: enableUCI,
+                max_datasets: maxDatasets,
+                repository_priority: priority,
+                kaggle_username: kaggleUser,
+                kaggle_key: kaggleKey,
+                dataset_score_threshold: threshold,
+                max_training_time: maxTraining,
+                max_project_time: maxProject,
+                max_retries: maxRetries,
+                cv_folds: cvFolds,
+                enable_automl_strategy: enableStrategy,
+                enable_memory_reuse: enableMemory,
+                enable_data_leakage_detection: enableLeakage
+            })
         });
         if (res.ok) {
             alert("Settings updated successfully!");
@@ -328,6 +376,15 @@ async function pollWorkflowTelemetry(projectId) {
         badge.className = `status-badge ${project.status}`;
         badge.textContent = project.status.toUpperCase();
         
+        // Show/hide conflict resolution panel
+        const conflictPanel = document.getElementById('conflict-resolution-panel');
+        if (project.status === 'awaiting_feedback') {
+            conflictPanel.style.display = 'block';
+            document.getElementById('conflict-message-display').textContent = project.error_message || "A task type mismatch conflict was detected. Please select the correct task type below to resolve & resume.";
+        } else {
+            conflictPanel.style.display = 'none';
+        }
+        
         // 2. Fetch Tasks Statuses to Color Nodes
         const tasksRes = await fetch(`/api/projects/${projectId}/tasks`);
         if (tasksRes.ok) {
@@ -489,4 +546,30 @@ function escapeJsString(str) {
 
 function jsonStringify(obj) {
     return JSON.stringify(obj);
+}
+
+async function submitResolveConflict(event) {
+    event.preventDefault();
+    if (!currentActiveProjectId) return;
+    
+    const selectEl = document.getElementById('conflict-resolve-select');
+    const selectedTaskType = selectEl.value;
+    
+    try {
+        const res = await fetch(`/api/projects/${currentActiveProjectId}/resolve_conflict`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ task_type: selectedTaskType })
+        });
+        if (res.ok) {
+            document.getElementById('conflict-resolution-panel').style.display = 'none';
+            // Immediate poller update
+            pollWorkflowTelemetry(currentActiveProjectId);
+        } else {
+            const err = await res.json();
+            alert("Failed to resolve conflict: " + (err.detail || "Unknown error"));
+        }
+    } catch (e) {
+        alert("Failed to resolve conflict: " + e.message);
+    }
 }
