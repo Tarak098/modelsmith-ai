@@ -32,7 +32,7 @@ class DatasetRetrievalAgent:
             log_agent_action(project_id, "data_collector", "INFO", f"Local Cache Hit. Found matching cached file: {cached_file}")
             return cached_file
             
-        priority_str = get_setting("repository_priority") or "cache,openml,kaggle,uci,sklearn"
+        priority_str = get_setting("repository_priority") or "cache,kaggle,openml,uci,sklearn"
         priority_list = [p.strip().lower() for p in priority_str.split(",")]
         threshold = get_setting_float("dataset_score_threshold", 0.4)
         max_candidates = get_setting_int("max_candidate_datasets", 10)

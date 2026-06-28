@@ -54,6 +54,37 @@ class FeatureEngineerAgent:
                 log_agent_action(project_id, self.agent_name, "INFO", f"Dropped noise features: {cols_to_drop}")
                 transformations.append(f"Dropped noise features: {cols_to_drop}")
                 
+            # Drop low-correlation features if the dataset has many features (e.g. > 20 columns)
+            features = [c for c in df.columns if c != target_col]
+            if len(features) > 20:
+                log_agent_action(project_id, self.agent_name, "INFO", f"Dataset has a large number of features ({len(features)}). Performing correlation-based feature selection...")
+                
+                # Temporarily encode target and features to compute correlation matrix
+                temp_df = df.copy()
+                for col in temp_df.columns:
+                    if temp_df[col].dtype == object or temp_df[col].dtype.name == 'category':
+                        try:
+                            temp_df[col] = LabelEncoder().fit_transform(temp_df[col].astype(str))
+                        except:
+                            temp_df = temp_df.drop(columns=[col])
+                
+                if target_col in temp_df.columns:
+                    correlations = temp_df.corr()[target_col].abs().drop(target_col, errors='ignore')
+                    # Drop columns where correlation is extremely low (< 0.05)
+                    low_corr_cols = list(correlations[correlations < 0.05].index)
+                    
+                    # Ensure we don't drop too many features, leaving at least 15 features
+                    max_to_drop = len(features) - 15
+                    if len(low_corr_cols) > max_to_drop:
+                        # Keep top correlated features
+                        sorted_low_corr = correlations.loc[low_corr_cols].sort_values()
+                        low_corr_cols = list(sorted_low_corr.index[:max_to_drop])
+                        
+                    if low_corr_cols:
+                        df = df.drop(columns=low_corr_cols)
+                        log_agent_action(project_id, self.agent_name, "INFO", f"Dropped {len(low_corr_cols)} low-correlation features (<0.05 correlation with target): {low_corr_cols}")
+                        transformations.append(f"Dropped {len(low_corr_cols)} low-correlation features")
+                
             # 1. Datetime / Lag Feature Extraction
             date_cols = [col for col in df.columns if "date" in col.lower() or "time" in col.lower()]
             if date_cols:
