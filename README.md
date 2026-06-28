@@ -1,18 +1,19 @@
 # ModelSmith AI – Autonomous Research Platform
 
-ModelSmith AI is an autonomous, multi-agent AI research platform designed to automate the end-to-end machine learning lifecycle for tabular datasets. From a simple natural language prompt, the system orchestrates a team of specialized AI agents to validate data, engineer features, train and tune candidate models, extract model explainability details, and compile professional research reports.
+ModelSmith AI is an autonomous, multi-agent AI research platform designed to automate the end-to-end machine learning lifecycle for tabular datasets. From a simple natural language prompt, the system orchestrates a team of specialized AI agents to retrieve datasets, scan profiles, formulate adaptive configurations, validate data, engineer features, train and tune candidate models, extract model explainability details, and compile professional research reports.
 
 ![ModelSmith AI Research Pipeline Telemetry](images/modelsmith_workflow_demo.webp)
 
 ## Key Features
 
-- **Autonomous Agent Orchestration**: Features a coordinator that manages a sequential pipeline of 12 specialized agents.
-- **Natural Language Planning**: Uses Gemini models to translate abstract machine learning goals into concrete execution steps.
-- **Dynamic Synthetic Generator**: Automatically compiles rich, domain-specific synthetic datasets (e.g., house prices, diabetes risk, customer churn) if no dataset is uploaded.
-- **Real-Time Telemetry Dashboard**: A stunning, modern dashboard showing agent logs, model leaderboards, and evaluation plots in real time.
-- **Long-Term Memory Integration**: Uses database memory stores to retrieve contexts from previous experiments, improving iteration speed and pipeline relevance.
-- **Automatic Research Reports**: Generates professional HTML & Markdown summaries including canditate leaderboards, diagnostic assessments, and explainability findings.
-- **Model Export & Download**: Directly download the final trained `.joblib` model binary from the real-time telemetry panel or the project history table.
+- **Sequential Dataset Search & Retrieval**: Sequentially searches Cache, OpenML, Kaggle, UCI, and Scikit-Learn repositories before falling back to synthetic generator datasets.
+- **Dataset Intelligence & Profile Scanner**: Computes MD5 file hashes, missing cell and IQR outlier rates, scans for data leakage, and matches targets.
+- **Feedback-Driven Task Mismatches**: Pauses execution and transitions to `awaiting_feedback` status when dataset target variables conflict with user classification/regression categories.
+- **AutoML Strategy Agent**: Formulates scaling methods (Standard/Robust), categorical encoders (OneHot/Target), model pools, and search limits.
+- **5-Step Retry Optimization Loop**: Sequentially retries model benchmark runs (Default $\rightarrow$ RobustScaler $\rightarrow$ Log transforms $\rightarrow$ Feature drops $\rightarrow$ SVM/MLP) if validation scores fall below target thresholds.
+- **Dynamic Tuning Budgets**: RandomizedSearchCV tuning limits scale according to row dimensions (skips for >100k rows, lightweight for 20k-100k, full for <20k).
+- **Stunning Real-Time Telemetry Dashboard**: A glassmorphic console displaying detailed CV score leaderboards, time budgets, and training speeds.
+- **Long-Term Memory store**: Caches models, parameters, and transformations using MD5 dataset hashes to skip training on identical data run requests.
 
 ---
 
@@ -23,30 +24,34 @@ The research lifecycle is divided among the following specialized agents:
 ```mermaid
 graph TD
     A[Planner Agent] --> B[Data Collector]
-    B --> C[Data Validator]
-    C --> D[Data Cleaner]
-    D --> E[EDA Agent]
-    E --> F[Feature Engineer]
-    F --> G[Model Selector]
-    G --> H[Hyperparameter Tuner]
-    H --> I[Evaluation Agent]
-    I --> J[Explainability Agent]
-    J --> K[Report Generator]
-    K --> L[Memory Agent]
+    B --> C[Dataset Intelligence]
+    C --> D[AutoML Strategy]
+    D --> E[Data Validator]
+    E --> F[Data Cleaner]
+    F --> G[EDA Agent]
+    G --> H[Feature Engineer]
+    H --> I[Model Selector]
+    I --> J[Hyperparameter Tuner]
+    J --> K[Evaluation Agent]
+    K --> L[Explainability Agent]
+    L --> M[Report Generator]
+    M --> N[Memory Agent]
 ```
 
-1. **Planner Agent**: Analyzes the problem statement and designs the target category, model candidates, and validation requirements.
-2. **Data Collector**: Copies uploaded CSV data or generates a domain-appropriate synthetic dataset.
-3. **Data Validator**: Audits dataset quality, recording duplicates, missing value percentages, and computing a general quality score.
-4. **Data Cleaner**: Normalizes column headers, drops duplicates, and applies median/mode missing value imputations.
-5. **EDA Agent**: Performs correlation analysis and plots the target distribution.
-6. **Feature Engineer**: Performs standard scaling, category label encoding, and extracts lag/calendar features for forecasting tasks.
-7. **Model Selector**: Trains candidate models (linear models, decision trees, ensembles) and ranks them in a leaderboard.
-8. **Hyperparameter Tuner**: Optimizes the best model using GridSearchCV and evaluates performance improvement.
-9. **Evaluation Agent**: Analyzes the final model, compiles diagnostic reports (overfitting/underfitting checks), and plots confusion matrices/residuals.
-10. **Explainability Agent**: Extracts feature weights/importances and formulates natural language explanations.
-11. **Report Generator**: Combines all agent metrics and plots into a formatted HTML and Markdown report.
-12. **Memory Agent**: Records the run's metadata into long-term SQL memory to allow iterative refinements.
+1. **Planner Agent**: Translates abstract goals into category definitions and model validation specifications.
+2. **Data Collector**: Sequentially searches local caches and remote repositories, falling back to LLM-guided synthetic generators.
+3. **Dataset Intelligence**: Scans data characteristics, flags leakages, and validates prompt categories.
+4. **AutoML Strategy**: Dynamically decides optimal preprocess steps, cross-validation folds, and training times.
+5. **Data Validator**: Evaluates row duplicates, missing rates, and quality scores.
+6. **Data Cleaner**: Drops duplicates and imputes values using strategy-specified configurations.
+7. **EDA Agent**: Renders correlation heatmaps and target distributions.
+8. **Feature Engineer**: Implements standard scaling, categorical encoding, datetime extractions, and forecasting lags.
+9. **Model Selector**: Executes the 5-attempt retry loop on benchmarks to find the best model.
+10. **Hyperparameter Tuner**: Runs RandomizedSearchCV with size-adaptive budgets.
+11. **Evaluation Agent**: Compiles validation metrics, residual plots, and overfitting diagnostics.
+12. **Explainability Agent**: Extracts tree-based or coefficient importances, and logs architect reasoning details.
+13. **Report Generator**: Generates clean HTML & Markdown research summaries.
+14. **Memory Agent**: Indexes final context caches under dataset MD5 hashes.
 
 ---
 
