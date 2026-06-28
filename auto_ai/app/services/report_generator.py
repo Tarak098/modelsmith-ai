@@ -99,6 +99,17 @@ class ReportGeneratorAgent:
             metrics_str = ", ".join(f"{mk}: {mv:.3f}" for mk, mv in row.get("metrics", {}).items())
             leaderboard_html += f"<tr><td>{idx+1}</td><td>{row.get('model_name')}</td><td>{metrics_str}</td></tr>"
 
+        # Build diagnostics list HTML
+        diagnoses_html = ""
+        for diag in evaluation.get('diagnoses', []):
+            css_class = "diag-warn" if "WARNING" in diag else "diag-success"
+            diagnoses_html += f'<div class="{css_class}">{diag}</div>'
+            
+        # Build limitations list HTML
+        limitations_html = ""
+        for lim in explain.get('limitations', []):
+            limitations_html += f"<li>{lim}</li>"
+
         # Tuning improvements
         tuning_html = ""
         t_metrics = tuner.get("tuning_metrics", {})
@@ -285,7 +296,7 @@ class ReportGeneratorAgent:
             </div>
             <div class="card">
                 <h3>Diagnostics</h3>
-                {"".join(f'<div class="{"diag-warn" if "WARNING" in diag else "diag-success"}">{diag}</div>' for diag in evaluation.get('diagnoses', []))}
+                {diagnoses_html}
             </div>
         </div>
         
@@ -306,7 +317,7 @@ class ReportGeneratorAgent:
         
         <p><strong>Identified Model Constraints:</strong></p>
         <ul>
-            {"".join(f"<li>{lim}</li>" for lim in explain.get('limitations', []))}
+            {limitations_html}
         </ul>
         
         <footer style="margin-top: 40px; text-align: center; font-size: 0.8em; color: #64748b;">
@@ -332,6 +343,10 @@ class ReportGeneratorAgent:
         for k, v in evaluation.get("metrics", {}).items():
             val_str = f"{v:.4f}" if isinstance(v, (float, int)) else str(v)
             metrics_md += f"- **{k.replace('_', ' ').title()}**: {val_str}\n"
+
+        # Pre-render diagnostics and limitations markdown lists (avoid backslashes in f-string expression)
+        diagnoses_md = "\n".join(f"- {diag}" for diag in evaluation.get('diagnoses', []))
+        limitations_md = "\n".join(f"- {lim}" for lim in explain.get('limitations', []))
 
         md = f"""# ModelSmith AI Research Report
 
@@ -365,7 +380,7 @@ class ReportGeneratorAgent:
 {metrics_md}
 
 ### Fit Diagnostics
-{"".join(f"- {diag}\\n" for diag in evaluation.get('diagnoses', []))}
+{diagnoses_md}
 
 ---
 
@@ -373,7 +388,7 @@ class ReportGeneratorAgent:
 {explain.get('natural_language_explanation', 'N/A')}
 
 ### Model Limitations
-{"".join(f"- {lim}\\n" for lim in explain.get('limitations', []))}
+{limitations_md}
 
 ---
 Report generated autonomously by ModelSmith AI.
