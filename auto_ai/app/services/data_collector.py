@@ -40,11 +40,20 @@ class DataCollectorAgent:
             # Case 2: Attempt public repository dataset retrieval first
             desc = plan.get("description", "")
             category = plan.get("category", "classification")
-            name = plan.get("project_name", "").lower()
+            name = plan.get("project_name", "")
             
-            log_agent_action(project_id, self.agent_name, "INFO", "No dataset uploaded. Searching public repositories sequentially...")
+            # Formulate a simplified search keyword query from LLM-generated project name
+            search_query = name if name else desc
+            query_clean = search_query.lower()
+            for stop_word in ["prediction", "classification", "forecasting", "regression", "task", "analysis", "dataset", "study", "project", "model", "generic"]:
+                query_clean = query_clean.replace(stop_word, "")
+            query_clean = " ".join(query_clean.split()).strip()
+            if not query_clean:
+                query_clean = "dataset"
+                
+            log_agent_action(project_id, self.agent_name, "INFO", f"Searching public repositories sequentially for topic: '{query_clean}'...")
             retriever = DatasetRetrievalAgent()
-            retrieved_path = retriever.execute(desc, expected_task=category)
+            retrieved_path = retriever.execute(query_clean, expected_task=category)
             
             if retrieved_path and Path(retrieved_path).exists():
                 src_path = Path(retrieved_path)

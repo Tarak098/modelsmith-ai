@@ -293,9 +293,9 @@ class ModelSelectionAgent:
                 elif name == "NaiveBayes":
                     candidates.append(("Naive Bayes", GaussianNB()))
                 elif name == "SVM":
-                    candidates.append(("SVM", SVC(probability=True, random_state=42)))
+                    candidates.append(("SVM", SVC(probability=True, random_state=42, max_iter=2000)))
                 elif name == "MLP":
-                    candidates.append(("MLP Classifier", MLPClassifier(max_iter=200, random_state=42)))
+                    candidates.append(("MLP Classifier", MLPClassifier(max_iter=500, random_state=42, early_stopping=True)))
             else:
                 if name == "LinearRegression":
                     candidates.append(("Linear Regression", LinearRegression()))
@@ -316,7 +316,7 @@ class ModelSelectionAgent:
                 elif name == "LightGBM":
                     candidates.append(("LightGBM Regressor", LGBMReg(random_state=42)))
                 elif name == "SVR":
-                    candidates.append(("SVR", SVR()))
+                    candidates.append(("SVR", SVR(max_iter=2000)))
                 elif name == "KNN":
                     from sklearn.neighbors import KNeighborsRegressor
                     candidates.append(("KNN Regressor", KNeighborsRegressor()))
